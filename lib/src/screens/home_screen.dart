@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:weather_provider/src/blocs/detail_bloc/bloc.dart';
+import 'package:weather_provider/src/blocs/detail_bloc/detail_bloc.dart';
+import 'package:weather_provider/src/blocs/query_bloc/bloc.dart';
 import 'package:weather_provider/src/models/query_result.dart';
-import 'package:weather_provider/src/models/weather_detail.dart';
 import 'package:weather_provider/src/resources/api_provider.dart';
 import 'package:weather_provider/src/screens/weather_detail_screen.dart';
 
@@ -10,6 +13,13 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  QueryBloc queryBloc;
+  @override
+  void initState() {
+    queryBloc = BlocProvider.of<QueryBloc>(context);
+    super.initState();
+  }
+
   String query;
   GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   ApiProvider apiProvider = ApiProvider();
@@ -44,43 +54,52 @@ class _HomeScreenState extends State<HomeScreen> {
                   icon: Icon(Icons.search),
                   onPressed: () async {
                     _formKey.currentState.save();
-                    setState(() {
-                      isLoading = true;
-                    });
-                    final queryResultList =
-                        await apiProvider.queryCities(query);
-                    setState(() {
-                      isLoading = false;
-                      resultList = queryResultList;
-                    });
+
+                    queryBloc.dispatch(SendQueryEvent(query));
                   },
                 )
               ],
             ),
           ),
-          if (isLoading == true)
-            Center(
-              child: CircularProgressIndicator(),
-            ),
-          if (resultList != null && isLoading == false)
-            Flexible(
-              child: ListView.builder(
-                itemCount: resultList.length,
-                itemBuilder: (context, index) {
-                  return ListTile(
-                    onTap: () {
-                      Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) => WeatherDetailScreen(
-                                  resultList[index].woeid)));
+          BlocBuilder(
+            bloc: queryBloc,
+            builder: (BuildContext context, QueryState state) {
+              if (state is InitialQueryState) {
+                return Container();
+              }
+              if (state is QueryLoadingState) {
+                return Center(
+                  child: CircularProgressIndicator(),
+                );
+              }
+              if (state is QueryFetchedState) {
+                return Flexible(
+                  child: ListView.builder(
+                    itemCount: queryBloc.results.length,
+                    itemBuilder: (context, index) {
+                      return ListTile(
+                        onTap: () {
+                          DetailBloc detailBloc = DetailBloc();
+                          detailBloc.dispatch(
+                              BringDetailEvent(queryBloc.results[index].woeid));
+                          Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (context) => BlocProvider(
+                                        builder: (context) => detailBloc,
+                                        child: WeatherDetailScreen(),
+                                      )));
+                        },
+                        title: Text(queryBloc.results[index].title),
+                        subtitle: Text(queryBloc.results[index].lattLong),
+                      );
                     },
-                    title: Text(resultList[index].title),
-                    subtitle: Text(resultList[index].lattLong),
-                  );
-                },
-              ),
-            )
+                  ),
+                );
+              }
+              return Container();
+            },
+          )
         ],
       ),
     );

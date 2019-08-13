@@ -1,37 +1,36 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import 'package:weather_provider/src/blocs/detail_bloc/bloc.dart';
 import 'package:weather_provider/src/models/weather_detail.dart';
 import 'package:weather_provider/src/resources/api_provider.dart';
 
 class WeatherDetailScreen extends StatefulWidget {
-  const WeatherDetailScreen(this.woeid);
-  final int woeid;
   @override
   _WeatherDetailScreenState createState() => _WeatherDetailScreenState();
 }
 
 class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
-  ApiProvider apiProvider = ApiProvider();
-  Future<WeatherDetail> weatherDetailFuture;
-  int weatherIndex = 0;
+  DetailBloc detailBloc;
   @override
   void initState() {
     super.initState();
-    weatherDetailFuture = apiProvider.getWeatherDetail(widget.woeid);
+    detailBloc = BlocProvider.of<DetailBloc>(context);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(),
-      body: FutureBuilder<WeatherDetail>(
-          future: weatherDetailFuture,
-          builder: (context, snapshot) {
-            if (!snapshot.hasData) {
-              return Center(
-                child: CircularProgressIndicator(),
-              );
-            }
+      body: BlocBuilder(
+        builder: (BuildContext context, DetailBlocState state) {
+          if (state is LoadingDetailState) {
+            return Center(
+              child: CircularProgressIndicator(),
+            );
+          }
+          if (state is FetchedDetailState) {
+            WeatherDetail weatherDetail = detailBloc.weatherDetail;
             return SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -46,22 +45,21 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
                           mainAxisSize: MainAxisSize.min,
                           children: <Widget>[
                             CityName(
-                              name: snapshot.data.title,
+                              name: weatherDetail.title,
                             ),
                             Weekday(
-                              weatherDate: snapshot
-                                  .data
-                                  .consolidatedWeather[weatherIndex]
+                              weatherDate: weatherDetail
+                                  .consolidatedWeather[detailBloc.index]
                                   .applicableDate,
                             ),
                             Temperature(
-                              temperature: snapshot.data
-                                  .consolidatedWeather[weatherIndex].theTemp,
+                              temperature: weatherDetail
+                                  .consolidatedWeather[detailBloc.index]
+                                  .theTemp,
                             ),
                             WeatherIcon(
-                              weatherAbbreviation: snapshot
-                                  .data
-                                  .consolidatedWeather[weatherIndex]
+                              weatherAbbreviation: weatherDetail
+                                  .consolidatedWeather[detailBloc.index]
                                   .weatherStateAbbr,
                               height: 150,
                               width: 150,
@@ -76,17 +74,15 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
                       height: 150.0,
                       child: ListView.builder(
                         scrollDirection: Axis.horizontal,
-                        itemCount: snapshot.data.consolidatedWeather.length,
+                        itemCount: weatherDetail.consolidatedWeather.length,
                         itemBuilder: (context, index) {
                           ConsolidatedWeather weatherData =
-                              snapshot.data.consolidatedWeather[index];
+                              weatherDetail.consolidatedWeather[index];
                           return Padding(
                             padding: const EdgeInsets.all(4.0),
                             child: InkWell(
                               onTap: () {
-                                setState(() {
-                                  weatherIndex = index;
-                                });
+                                detailBloc.dispatch(SwitchDetailEvent(index));
                               },
                               child: Container(
                                 width: 100.0,
@@ -117,7 +113,11 @@ class _WeatherDetailScreenState extends State<WeatherDetailScreen> {
                 ],
               ),
             );
-          }),
+          }
+          return Container();
+        },
+        bloc: detailBloc,
+      ),
     );
   }
 }
